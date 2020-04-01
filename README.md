@@ -8,5 +8,6 @@ the packages are needed for wsjtx install on raspberry system:
  you also can install wsjtx with the command on raspberry :    
     dpkg -i http://physics.princeton.edu/pulsar/k1jt/wsjtx_2.1.2_armhf.deb   
  
+ runing command : nohup ./start.sh >> /dev/shm/run.log 2>&1 &   
  
 some code is fork from :https://github.com/sm3ulc/ft8-scripts , thanks.
