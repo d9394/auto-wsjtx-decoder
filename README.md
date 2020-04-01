@@ -1,5 +1,5 @@
 # auto-wsjtx-decoder
-a script for automatic decode using wsjtx with pipe audio stream   
+a script for automatic decode using wsjtx with pipe audio stream on a raspberry machine    
    
 before use the script , you should install wsjtx-2.1.2 first.   
 the packages are needed for wsjtx install on raspberry system:   
