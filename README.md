@@ -10,4 +10,4 @@ the packages are needed for wsjtx install on raspberry system:
  
  runing command : nohup ./start.sh >> /dev/shm/run.log 2>&1 &   
  
-some code is fork from :https://github.com/sm3ulc/ft8-scripts , thanks.
+some code is fork from :https://github.com/sm3ulc/ft8-scripts & https://github.com/rtmrtmrtmrtm/weakmon, thanks.
