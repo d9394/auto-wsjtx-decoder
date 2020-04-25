@@ -4,11 +4,12 @@
 # 
 
 import datetime
+import time
 import getopt
 import sys
 #import time
 import threading
-import uuid
+#import uuid
 import wave
 #import os
 import subprocess
@@ -18,37 +19,43 @@ import pskreport
 import re
 
 def decoder(wav_file) :
-#	print("WAV file %s" % wav_file)
+	space="-\\|/"[int(int(wav_file[-6:-4])/15)]
+	if config['delay'] > 0 :
+		print("%s Decode delay %d seconds" % (space,config['delay']))
+		time.sleep(config['delay'])
+	if config['verbose'] :
+		print("%s Start decode WAV file %s @ %s" % (space, wav_file, datetime.datetime.now()))
 	"""
 	r = FT8()
 	p = r.gowav(wav_file, 0)
 	"""
 	p = subprocess.check_output(["jt9","-8","-d","3","-t","/dev/shm/","-a","/dev/shm/",wav_file])
-
 #	print("%s" % p.decode('utf-8').split("\n"))
 	if p != 0 :
 		udp_send(p)
 		psk_send(p)
 		subprocess.call(['rm','-f',wav_file])
-#	os.remove(wav_file)
+	if config['verbose'] :
+		print("%s End decode WAV file %s @ %s" % (space, wav_file, datetime.datetime.now()))
 
 def udp_send(result) :
 	global nmSocket, ip_port
-	nmSocket.sendto('Start Decode 14074000-FT8-Raspberry159'.encode('utf-8'),ip_port)   #send Identification of this decoder
-	iq = open('/dev/shm/ft8.txt', "a")            #log write to a file for debug or other program use.
+#	nmSocket.sendto('Start Decode {}-{}-{}'.format(config['frequency'], config['mode'], config['callsign']).encode('utf-8'),ip_port)
+	iq = open('/dev/shm/ft8.txt', "a")
 	for line in result.decode("utf-8").split("\n") :
 		try:
 			detail=line.split()
 			a = int(detail[0])
 			adif = ''
-			print("+++++ %s" % line)
+			if config['verbose'] :
+				print("+++++ %s" % line)
 			iq.write(line + '\n')
-			nmSocket.sendto(line.encode('utf-8'),ip_port)      #send to my udp2telnet server
+			nmSocket.sendto(line.encode('utf-8'),ip_port)
 		except :
-			a = 0      #nothing
+			a = 0
 #			print("----- %s" % line)
 	iq.close()
-	nmSocket.sendto('End Decode FT8-Raspberry159'.encode('utf-8'),ip_port)     #nothing only for Identification of this decoder
+#	nmSocket.sendto('End Decode {}-{}-{}'.format(config['frequency'], config['mode'], config['callsign']).encode('utf-8'),ip_port)
 
 def iscall(call):
 	if len(call) < 3:
@@ -65,7 +72,6 @@ def psk_send(result) :
 	global pskr
 	for line in result.decode("utf-8").split("\n") :
 		detail=line.split()
-		#try:
 		if len(detail) > 5 :
 #			print("line %s" % detail)
 			txt = line[24:60]
@@ -80,32 +86,55 @@ def psk_send(result) :
 
 			if mm != None and iscall(mm.group(1)):
 				if pskr != None:
-#					print("pskr {}, {}, {}, {}, {}\n".format(mm.group(1), hz, "FT8", mm.group(2), tm))
+					if config['verbose'] :
+						print("pskr {}, {}, {}, {}, {}".format(mm.group(1), hz, "FT8", mm.group(2), tm))
 					pskr.got(mm.group(1), hz, "FT8", mm.group(2), tm)
 			mm = re.search(r'^([0-9A-Z/]+) ([0-9A-Z/]+) ([A-R][A-R][0-9][0-9])$', txt)
 			if mm != None and iscall(mm.group(1)) and iscall(mm.group(2)):
 				if pskr != None:
-#					print("pskr {} {}, {}, {}, {}, {}\n".format(mm.group(1),mm.group(2), hz, "FT8", mm.group(3), tm))
+					if config['verbose'] :
+						print("pskr {} {}, {}, {}, {}, {}".format(mm.group(1),mm.group(2), hz, "FT8", mm.group(3), tm))
 					pskr.got(mm.group(2), hz, "FT8", mm.group(3), tm)
-		#except Exception as e:
-		#	print("psk send error %s" % e)
-	
-	
-def main():
-	global nmSocket, ip_port, pskr
-	verbose = False
-	nametag = ''
-	tmp_path = '/dev/shm'
 
-	print("ARGV:", sys.argv[1:])
-	options, remainder = getopt.getopt(sys.argv[1:], 't:v', ['output=', 'verbose',])
+def main():
+	global nmSocket, ip_port, pskr, config
+	config = {
+		'verbose' : False,
+		'nametag' : '',
+		'tmp_path' : '/dev/shm',
+		'frequency' : 14074000,
+		'mode' : 'FT8',
+		'callsign' : 'your-callsign',
+		'grid' : 'AA00',
+		'udp_server_ip' : '192.168.103.1',
+		'udp_server_port' : 5556,
+		'delay' : 0,
+	}
+
+	#print("ARGV:", sys.argv[1:])
+	options, remainder = getopt.getopt(sys.argv[1:], 't:vf:m:c:g:s:i:d:', ['tag=', 'verbose', 'frequency=', 'mode=', 'callsign=', 'grid=', 'udp-server-ip=', 'udp-server-port=', 'delay='])
 
 	for opt, arg in options:
 		if opt in ('-t', '--tag'):
-			nametag = '-' + arg
+			config['nametag'] = '-' + arg
 		elif opt in ('-v', '--verbose'):
-			verbose = True
-
+			config['verbose'] = True
+		elif opt in ('-c', '--callsign'):
+			config['callsign'] = arg.upper()
+		elif opt in ('-f', '--frequency'):
+			config['frequency'] = int(arg)
+		elif opt in ('-m', '--mode'):
+			config['mode'] = arg.upper()
+		elif opt in ('-g', '--grid'):
+			config['grid'] = arg.upper()
+		elif opt in ('-s', '--udp-server-ip'):
+			config['udp_server_ip'] = arg
+		elif opt in ('-i', '--udp-server-port'):
+			config['udp_server_port'] = int(arg)
+		elif opt in ('-d', '--delay'):
+			config['delay'] = int(arg)
+	if config['verbose'] :
+		print("config : %s" % config)
 	blocktime = 15
 	blocktimeoffset = datetime.timedelta(milliseconds=200)
 	samplerate = 12000
@@ -120,20 +149,22 @@ def main():
 	first=True
 
 	nmSocket = socket(AF_INET,SOCK_DGRAM)
-	ip_port = (gethostbyname('192.168.1.1'), 5556)    #send udp to my udp2telnet server
-	
-	pskr = pskreport.T("callsign", "aa11", "ft8-decoder", testing=False)    #send udp to pskreporter.info
+	ip_port = (gethostbyname(config['udp_server_ip']), config['udp_server_port'])
+	nmSocket.sendto('Start Decode {}-{}-{}'.format(config['frequency'], config['mode'], config['callsign']).encode('utf-8'),ip_port)
+	pskr = pskreport.T(config['callsign'], config['grid'], "ft8-decoder", testing=False)
 	
 	while True:
 		data = sys.stdin.buffer.read(chunksize)
 		block.extend(data)
 
 		if datetime.datetime.now() > endtime:
-			print("Buffersize", len(block))
-			fname = tmp_path + "/file"+nametag+"-"+starttime.strftime("%Y%m%d%H%M%S")+".wav"
+			if config['verbose'] :
+				print("Buffersize", len(block))
+			fname = config['tmp_path'] + "/file" + config['nametag'] + "-" + starttime.strftime("%Y%m%d%H%M%S")+".wav"
 
 			if not first:
-				print("Writing: ",fname)
+				if config['verbose'] :
+					print("Writing: ",fname)
 				"""
 				iq = open(fname, "wb")
 				iq.write(block)
@@ -145,7 +176,7 @@ def main():
 				wf.setframerate(samplerate)
 				wf.writeframes(block)
 				wf.close()
-				t = threading.Thread(target=decoder,args=(fname,), name=uuid.uuid1())
+				t = threading.Thread(target=decoder,args=(fname,), name=datetime.datetime.now().strftime('%s'))
 				t.start()
 			else:
 				print("Unfilled block. Ditching data")
